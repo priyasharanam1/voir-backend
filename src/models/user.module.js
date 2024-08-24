@@ -1,4 +1,6 @@
 import mongoose, { Schema } from "mongoose";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 
 const userSchema = new Schema(
   {
@@ -8,7 +10,7 @@ const userSchema = new Schema(
       unique: true,
       lowercase: true,
       trim: true,
-      index: true, //to make field faster to search
+      index: true, // To make field faster to search
     },
     email: {
       type: String,
@@ -24,11 +26,11 @@ const userSchema = new Schema(
       index: true,
     },
     avatar: {
-      type: String, //cloudinary url
+      type: String, // Cloudinary URL
       required: true,
     },
     coverimage: {
-      type: String, //cloudinary url
+      type: String, // Cloudinary URL
     },
     watchHistory: [
       {
@@ -46,5 +48,54 @@ const userSchema = new Schema(
   },
   { timestamps: true }
 );
+
+// Middleware for generating the hashed password
+userSchema.pre("save", async function (next) {
+  try {
+    if (!this.isModified("password")) return next();
+
+    this.password = await bcrypt.hash(this.password, 10);
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Method for checking if the password entered by the user is correct
+userSchema.methods.isPasswordCorrect = async function (password) {
+  return await bcrypt.compare(password, this.password);
+};
+
+// Method for generating access token
+userSchema.methods.generateAccessToken = function () {
+  return jwt.sign(
+    {
+      _id: this._id,
+      email: this.email,
+      username: this.username,
+      fullname: this.fullname,
+    },
+    process.env.ACCESS_TOKEN_SECRET,
+    {
+      expiresIn: process.env.ACCESS_TOKEN_EXPIRY,
+    }
+  );
+};
+
+// Method for generating refresh token
+userSchema.methods.generateRefreshToken = function () {
+  return jwt.sign(
+    {
+      _id: this._id,
+      email: this.email,
+      username: this.username,
+      fullname: this.fullname,
+    },
+    process.env.REFRESH_TOKEN_SECRET,
+    {
+      expiresIn: process.env.REFRESH_TOKEN_EXPIRY,
+    }
+  );
+};
 
 export const User = mongoose.model("User", userSchema);
