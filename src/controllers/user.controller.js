@@ -239,7 +239,7 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
   const { oldPassword, newPassword } = req.body;
 
   // Retrieve the currently authenticated user using the user ID from the request
-  const user = await User.findById(req.user?.id);
+  const user = await User.findById(req.user?._id);
 
   // Check if the old password provided is correct
   const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
@@ -261,5 +261,13 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, {}, "Password changed successfully!"));
 });
 
+const getCurrentUser = asyncHandler(async (req, res) => {
+  // Return a 200 status response with the currently authenticated user's details
+  return res.status(200).json(
+    new ApiResponse(200, req.user, "Current user fetched successfully")
+  );
+});
 
-export { registerUser, loginUser, logoutUser, refreshAccessToken };
+
+
+export { registerUser, loginUser, logoutUser, refreshAccessToken, changeCurrentPassword, getCurrentUser };
