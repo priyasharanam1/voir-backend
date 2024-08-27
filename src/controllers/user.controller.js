@@ -1,14 +1,16 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.model.js";
-import { uploadOnCloudinary, deleteFromCloudinary } from "../utils/cloudinary.js";
+import {
+  uploadOnCloudinary,
+  deleteFromCloudinary,
+} from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
 
-
 // Utility function to extract public_id from a Cloudinary URL
 const extractPublicIdFromUrl = (url) => {
-  return url.split('/').pop().split('.')[0];
+  return url.split("/").pop().split(".")[0];
 };
 
 // Function to generate access and refresh tokens for a user
@@ -435,6 +437,84 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, user, "Cover image updated successfully"));
 });
 
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+  const { username } = req.params;
+
+  // Validate that the username is provided and is not just whitespace
+  if (!username?.trim()) {
+    throw new ApiError(400, "Username is missing!");
+  }
+
+  const channel = await User.aggregate([
+    {
+      // Match the user based on the provided username (case-insensitive)
+      $match: {
+        username: username.toLowerCase(),
+      },
+    },
+    {
+      // Perform a lookup to get all subscriptions where the user is the channel
+      // This will give us the list of subscribers for this user
+      $lookup: {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "channel",
+        as: "subscribers",
+      },
+    },
+    {
+      // Perform another lookup to get all subscriptions where the user is the subscriber
+      // This will give us the list of channels that the user is subscribed to
+      $lookup: {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "subscriber",
+        as: "subscribedTo",
+      },
+    },
+    {
+      // Add computed fields to the aggregation result
+      $addFields: {
+        // Calculate the number of subscribers
+        subscribersCount: {
+          $size: "$subscribers",
+        },
+        // Calculate the number of channels the user is subscribed to
+        channelsSubscribedToCount: {
+          $size: "$subscribedTo",
+        },
+        // Determine if the logged-in user is subscribed to this channel
+        isSubscribed: {
+          $in: [req.user?._id, "$subscribers.subscriber"], // Check if req.user._id is among the subscribers
+        },
+      },
+    },
+    {
+      // Project only the required fields in the final output
+      $project: {
+        fullName: 1,
+        username: 1,
+        subscribersCount: 1,
+        channelsSubscribedToCount: 1,
+        isSubscribed: 1,
+        avatar: 1,
+        coverImage: 1,
+        email: 1,
+      },
+    },
+  ]);
+
+  // If no channel was found, throw a 404 error
+  if (!channel.length) {
+    throw new ApiError(404, "Channel does not exist");
+  }
+
+  // Return the first item from the array since we're expecting only one result
+  return res
+    .status(200)
+    .json(new ApiResponse(200, channel[0], "User channel fetched successfully"));
+});
+
 
 export {
   registerUser,
@@ -446,4 +526,5 @@ export {
   updateAccountDetails,
   updateUserAvatar,
   updateUserCoverImage,
+  getUserChannelProfile,
 };
