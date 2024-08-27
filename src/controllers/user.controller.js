@@ -512,7 +512,64 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
   // Return the first item from the array since we're expecting only one result
   return res
     .status(200)
-    .json(new ApiResponse(200, channel[0], "User channel fetched successfully"));
+    .json(
+      new ApiResponse(200, channel[0], "User channel fetched successfully")
+    );
+});
+
+const getWatchHistory = asyncHandler(async (req, res) => {
+  // Aggregate query to fetch watch history for the logged-in user
+  const user = await User.aggregate([
+    {
+      // Match the user by their _id using req.user._id
+      $match: {
+        _id: new mongoose.Types.ObjectId(req.user._id),
+      },
+    },
+    {
+      // Lookup the "videos" collection based on the video IDs stored in the "watchHistory" array
+      $lookup: {
+        from: "videos", // Collection to join
+        localField: "watchHistory", // Field in the User collection (array of video IDs)
+        foreignField: "_id", // Field in the Video collection (video ID)
+        as: "watchHistory", // Output array field containing the matched videos
+        pipeline: [
+          {
+            // Lookup the "users" collection to fetch details of the video owner
+            $lookup: {
+              from: "users", // Collection to join (User details)
+              localField: "owner", // Field in the Video collection (owner's ID)
+              foreignField: "_id", // Field in the User collection (user's ID)
+              as: "owner", // Output array field containing the matched user (owner) details
+              pipeline: [
+                {
+                  // Project only the required fields (fullName, username, avatar) from the owner
+                  $project: {
+                    fullName: 1,
+                    username: 1,
+                    avatar: 1,
+                  },
+                },
+              ],
+            },
+          },
+          {
+            // Flatten the "owner" array to a single object using $first
+            $addFields: {
+              owner: {
+                $first: "$owner",
+              },
+            },
+          },
+        ],
+      },
+    },
+  ]);
+
+  // If the aggregation is successful, respond with the watch history
+  return res
+    .status(200)
+    .json(new ApiResponse(200, user[0]?.watchHistory || [], "Watch history fetched successfully"));
 });
 
 
@@ -527,4 +584,5 @@ export {
   updateUserAvatar,
   updateUserCoverImage,
   getUserChannelProfile,
+  getWatchHistory
 };
