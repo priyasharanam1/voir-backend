@@ -268,6 +268,31 @@ const getCurrentUser = asyncHandler(async (req, res) => {
   );
 });
 
+const updateAccountDetails = asyncHandler(async (req, res) => {
+  // Destructure fullName and email from the request body
+  const { fullName, email } = req.body;
+
+  // Validate that all required fields are provided
+  if (!fullName || !email) {
+    throw new ApiError(400, "All the fields are required");
+  }
+
+  // Update the user's account details using their ID from req.user
+  const user = await User.findByIdAndUpdate(
+    req.user?._id, // Ensure req.user._id is provided
+    {
+      $set: { fullName, email },
+    },
+    {
+      new: true, // Return the updated document
+    }
+  ).select("-password"); // Exclude password from the returned user object
+
+  // Send the updated user object in the response
+  return res.status(200).json(
+    new ApiResponse(200, user, "Account details updated successfully")
+  );
+});
 
 
 export { registerUser, loginUser, logoutUser, refreshAccessToken, changeCurrentPassword, getCurrentUser };
